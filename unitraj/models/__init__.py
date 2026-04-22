@@ -1,25 +1,23 @@
-from unitraj.models.autobot.autobot import AutoBotEgo
-from unitraj.models.mtr.MTR import MotionTransformer
-from unitraj.models.wayformer.wayformer import Wayformer
-from unitraj.models.fmae.trainer_mae import TrainerMAE
-from unitraj.models.fmae.trainer_forecast import TrainerForecast
-from unitraj.models.emp.trainer_forecast import TrainerEMP
-from unitraj.models.smart.smart import SMART
+from importlib import import_module
 
-__all__ = {
-    'autobot': AutoBotEgo,
-    'wayformer': Wayformer,
-    'MTR': MotionTransformer,
-    'MAE': TrainerMAE,
-    'forecast': TrainerForecast,
-    'EMP': TrainerEMP,
-    'SMART': SMART,
+MODEL_REGISTRY = {
+    'autobot': ('unitraj.models.autobot.autobot', 'AutoBotEgo'),
+    'wayformer': ('unitraj.models.wayformer.wayformer', 'Wayformer'),
+    'MTR': ('unitraj.models.mtr.MTR', 'MotionTransformer'),
+    'MAE': ('unitraj.models.fmae.trainer_mae', 'TrainerMAE'),
+    'forecast': ('unitraj.models.fmae.trainer_forecast', 'TrainerForecast'),
+    'EMP': ('unitraj.models.emp.trainer_forecast', 'TrainerEMP'),
+    'SMART': ('unitraj.models.smart.smart', 'SMART'),
 }
 
 
-def build_model(config):
-    model = __all__[config.method.model_name](
-        config=config
-    )
+def get_model_class(model_name):
+    module_name, class_name = MODEL_REGISTRY[model_name]
+    module = import_module(module_name)
+    return getattr(module, class_name)
 
+
+def build_model(config):
+    model_cls = get_model_class(config.method.model_name)
+    model = model_cls(config=config)
     return model

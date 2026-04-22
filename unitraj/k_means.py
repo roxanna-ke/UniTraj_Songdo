@@ -7,8 +7,8 @@ from omegaconf import OmegaConf
 from sklearn.cluster import KMeans
 from torch.utils.data import DataLoader
 
-from datasets import build_dataset
-from utils.utils import set_seed
+from unitraj.datasets import build_dataset
+from unitraj.utils.utils import set_seed
 
 
 @hydra.main(version_base=None, config_path="configs", config_name="config")

@@ -4,9 +4,9 @@ import torch
 torch.set_float32_matmul_precision('medium')
 from pytorch_lightning.loggers import WandbLogger
 from torch.utils.data import DataLoader
-from models import build_model
-from datasets import build_dataset
-from utils.utils import set_seed
+from unitraj.models import build_model
+from unitraj.datasets import build_dataset
+from unitraj.utils.utils import set_seed
 import hydra
 from omegaconf import OmegaConf
 

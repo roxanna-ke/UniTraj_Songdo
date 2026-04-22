@@ -2,8 +2,8 @@ import torch
 
 torch.set_float32_matmul_precision('medium')
 from torch.utils.data import DataLoader
-from datasets import build_dataset
-from datasets.common_utils import trajectory_correspondance
+from unitraj.datasets import build_dataset
+from unitraj.datasets.common_utils import trajectory_correspondance
 import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np

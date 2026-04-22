@@ -1,7 +1,13 @@
 import os
 
 from setuptools import find_packages, setup
-from torch.utils.cpp_extension import BuildExtension, CUDAExtension
+
+try:
+    from torch.utils.cpp_extension import BuildExtension, CUDAExtension
+    import torch
+    CUDA_AVAILABLE = torch.cuda.is_available()
+except ImportError:
+    CUDA_AVAILABLE = False
 
 
 def make_cuda_ext(name, module, sources):
@@ -13,19 +19,10 @@ def make_cuda_ext(name, module, sources):
 
 
 if __name__ == '__main__':
-    setup(
-        name='UniTraj',
-        version=1.0,
-        description='A Unified Framework for Scalable Vehicle Trajectory Prediction',
-        author='Lan Feng',
-        author_email='fenglan18@outlook.com',
-        license='Apache License 2.0',
-        packages=find_packages(exclude=['tools', 'data', 'output']),
-        cmdclass={
-            'build_ext': BuildExtension,
-        },
+    ext_modules = []
 
-        ext_modules=[
+    if CUDA_AVAILABLE:
+        ext_modules.extend([
             make_cuda_ext(
                 name='knn_cuda',
                 module='unitraj.models.mtr.ops.knn',
@@ -48,5 +45,20 @@ if __name__ == '__main__':
                     'src/attention_weight_computation_kernel.cu',
                 ],
             ),
-        ],
+        ])
+        cmdclass = {'build_ext': BuildExtension}
+    else:
+        print("CUDA not available, skipping CUDA extensions...")
+        cmdclass = {}
+
+    setup(
+        name='UniTraj',
+        version=1.0,
+        description='A Unified Framework for Scalable Vehicle Trajectory Prediction',
+        author='Lan Feng',
+        author_email='fenglan18@outlook.com',
+        license='Apache License 2.0',
+        packages=find_packages(exclude=['tools', 'data', 'output']),
+        cmdclass=cmdclass,
+        ext_modules=ext_modules,
     )
