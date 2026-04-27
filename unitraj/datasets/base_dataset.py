@@ -1,3 +1,5 @@
+import copy
+import hashlib
 import os
 import pickle
 import shutil
@@ -402,16 +404,18 @@ class BaseDataset(Dataset):
             'center_gt_trajs_src': obj_trajs_full[track_index_to_predict]
         }
 
-        if info['map_infos']['all_polylines'].__len__() == 0:
-            info['map_infos']['all_polylines'] = np.zeros((2, 7), dtype=np.float32)
+        map_infos = self.prepare_map_infos(info['map_infos'], scene_id)
+
+        if map_infos['all_polylines'].__len__() == 0:
+            map_infos['all_polylines'] = np.zeros((2, 7), dtype=np.float32)
             print(f'Warning: empty HDMap {scene_id}')
 
         if self.config.manually_split_lane:
             map_polylines_data, map_polylines_mask, map_polylines_center = self.get_manually_split_map_data(
-                center_objects=center_objects, map_infos=info['map_infos'])
+                center_objects=center_objects, map_infos=map_infos)
         else:
             map_polylines_data, map_polylines_mask, map_polylines_center = self.get_map_data(
-                center_objects=center_objects, map_infos=info['map_infos'])
+                center_objects=center_objects, map_infos=map_infos)
 
         ret_dict['map_polylines'] = map_polylines_data
         ret_dict['map_polylines_mask'] = map_polylines_mask.astype(bool)
@@ -456,6 +460,64 @@ class BaseDataset(Dataset):
             ret_list.append(ret_dict_i)
 
         return ret_list
+
+    def get_scene_rng(self, scene_id):
+        perturb_seed = self.config.get('map_perturb_seed', None)
+        if perturb_seed is None:
+            return np.random.default_rng()
+
+        seed_material = f'{scene_id}:{perturb_seed}'.encode('utf-8')
+        seed = int(hashlib.sha256(seed_material).hexdigest()[:16], 16) % (2 ** 32)
+        return np.random.default_rng(seed)
+
+    def prepare_map_infos(self, map_infos, scene_id):
+        xy_std = float(self.config.get('map_perturb_xy_std', 0.0) or 0.0)
+        shift_std = float(self.config.get('map_perturb_shift_std', 0.0) or 0.0)
+        if xy_std <= 0.0 and shift_std <= 0.0:
+            return map_infos
+
+        perturbed_map_infos = copy.deepcopy(map_infos)
+        polylines = perturbed_map_infos['all_polylines'].copy()
+        if polylines.size == 0:
+            return perturbed_map_infos
+
+        rng = self.get_scene_rng(scene_id)
+        if xy_std > 0.0:
+            polylines[:, 0:2] += rng.normal(0.0, xy_std, size=polylines[:, 0:2].shape).astype(np.float32)
+
+        if shift_std > 0.0:
+            for map_key in ('lane', 'road_line', 'road_edge', 'crosswalk', 'speed_bump'):
+                for polyline_dict in perturbed_map_infos.get(map_key, []):
+                    polyline_index = polyline_dict.get('polyline_index', None)
+                    if polyline_index is None:
+                        continue
+                    start_idx, end_idx = polyline_index
+                    segment = polylines[start_idx:end_idx]
+                    if len(segment) <= 1:
+                        continue
+
+                    tangent = segment[:, 3:5].mean(axis=0)
+                    tangent_norm = np.linalg.norm(tangent)
+                    if tangent_norm < 1e-6:
+                        continue
+
+                    tangent = tangent / tangent_norm
+                    normal = np.array([-tangent[1], tangent[0]], dtype=np.float32)
+                    segment[:, 0:2] += normal[None, :] * np.float32(rng.normal(0.0, shift_std))
+
+        for map_key in ('lane', 'road_line', 'road_edge', 'crosswalk', 'speed_bump'):
+            for polyline_dict in perturbed_map_infos.get(map_key, []):
+                polyline_index = polyline_dict.get('polyline_index', None)
+                if polyline_index is None:
+                    continue
+                start_idx, end_idx = polyline_index
+                segment = polylines[start_idx:end_idx]
+                if len(segment) == 0:
+                    continue
+                segment[:, 3:6] = get_polyline_dir(segment[:, 0:3])
+
+        perturbed_map_infos['all_polylines'] = polylines
+        return perturbed_map_infos
 
     def postprocess(self, output):
 
